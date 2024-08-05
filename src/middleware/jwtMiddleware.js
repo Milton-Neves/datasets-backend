@@ -7,7 +7,7 @@ const verifyToken = (req, res, next) => {
         req.userId = decoded
         next()
     } catch (error) {
-        res.status(401).json({ message: "User not autorized", errp: error.message })
+        res.status(401).json({ message: "User not autorized" })
         returns
     }
 }
