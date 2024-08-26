@@ -1,5 +1,13 @@
+/**
+ * @module ControllerDataset
+ * @Description Funções do controller dataset
+ */
+
 import Datasets from "../models/Dataset.js";
 import { StatusCodes } from "http-status-codes";
+import { datasetSchemaValidate } from "../utils/validateControllers.js";
+import connectAMQP from "../config/connectAMQP.js";
+
 
 /**
  * Cria um novo dataset com base nos dados recebidos no corpo da requisição e o caminho de um arquivo enviado.
@@ -10,15 +18,32 @@ import { StatusCodes } from "http-status-codes";
  */
 export async function createDataset(req, res) {
     try {
-        const { name, description } = req.body;
+        
+        const validatedData = await datasetSchemaValidate.validate(req.body, {abortEarly : false});
+        
         const filePath = req.file ? req.file.path : null;
 
         if (filePath === null) {
             return res.status(StatusCodes.BAD_REQUEST).send({ message: "File not send" });
         }
   
+        //Database
+        const {name, description} = validatedData;
         const dataset = new Datasets({ name, description, filePath });
         await dataset.save();
+
+        //AMQP
+        const channel = await connectAMQP();
+        if (channel){
+            const message = JSON.stringify({name, filePath});
+            channel.sendToQueue("datasets", Buffer.from(message)); //Transform in bytes
+            console.log(`Send message to amqp: ${message}`);
+        }else{
+            throw new Error("Failed to connect AMQP");
+        }    
+
+
+
         res.status(StatusCodes.CREATED).send();
     } catch (error) {
         res.status(StatusCodes.BAD_REQUEST).send(error);
